@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const BASE_URL = "https://foodiecircle.onrender.com";
+const BASE_URL = import.meta.env.VITE_API_URL;
 const API = "https://www.themealdb.com/api/json/v1/1";
 
 export default function App() {
