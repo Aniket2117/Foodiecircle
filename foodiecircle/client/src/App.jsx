@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 
 const BASE_URL = "https://foodiecircle.onrender.com";
+const API = "https://www.themealdb.com/api/json/v1/1";
 
 export default function App() {
   const [dbRecipes, setDbRecipes] = useState([]);
   const [apiRecipes, setApiRecipes] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState("");z
   const [category, setCategory] = useState("All");
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
@@ -38,7 +39,7 @@ export default function App() {
 
   // ================= DB =================
   useEffect(() => {
-    axios.get("http://localhost:5000/recipes")
+    axios.get(`${BASE_URL}/api/recipes`)
       .then((res) => setDbRecipes(res.data))
       .catch(() => {});
   }, []);
@@ -121,8 +122,7 @@ export default function App() {
   // ================= AUTH =================
   const handleLogin = async () => {
     try {
-      const res = await axios.post("http://localhost:5000/login", authForm);
-
+      const res = await axios.post(`${BASE_URL}/api/auth/login`, authForm);
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("user", res.data.email);
 
@@ -152,10 +152,8 @@ export default function App() {
       return;
     }
 
-    await axios.post("http://localhost:5000/save", recipe, {
-      headers: { Authorization: token },
-    });
-
+ const res = await axios.get(`${BASE_URL}/api/recipes`);
+setSavedRecipes(res.data.filter(r => r.savedBy?.includes(user)));
     fetchSaved();
     alert("Saved ❤️");
   };
@@ -164,9 +162,9 @@ export default function App() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    const res = await axios.get("http://localhost:5000/saved", {
-      headers: { Authorization: token },
-    });
+   await axios.post(`${BASE_URL}/api/recipes/save/${recipe._id}`, {
+  userId: user
+});
 
     setSavedRecipes(res.data);
   };
@@ -183,14 +181,11 @@ export default function App() {
       const formData = new FormData();
       formData.append("title", uploadForm.title);
       formData.append("category", uploadForm.category);
-      formData.append("ingredients", uploadForm.ingredients);
-      formData.append("steps", uploadForm.steps);
+  formData.append("ingredients", JSON.stringify(uploadForm.ingredients.split(",")));
+formData.append("steps", JSON.stringify(uploadForm.steps.split(",")));
       formData.append("image", uploadForm.file);
 
-      const res = await axios.post(
-        "http://localhost:5000/upload",
-        formData
-      );
+      const res =await axios.post(`${BASE_URL}/api/recipes/upload`, formData);
 
       setDbRecipes((prev) => [res.data, ...prev]);
 
@@ -215,12 +210,7 @@ const unsaveRecipe = async (recipe) => {
     console.log("UNSAVE CLICK:", recipe); // 🔍
 
     const res = await axios.post(
-      "http://localhost:5000/unsave",
-      recipe,
-      {
-        headers: { Authorization: token },
-      }
-    );
+  axios.post("http://localhost:5000/unsave", recipe)
 
     console.log("UNSAVE RESPONSE:", res.data);
 
@@ -381,7 +371,7 @@ const unsaveRecipe = async (recipe) => {
                     meal.image
                       ? meal.image.startsWith("http")
                         ? meal.image
-                        : `http://localhost:5000/${meal.image}`
+                        : `${BASE_URL}${meal.image}`
                       : meal.strMealThumb
                   }
                   className="h-40 w-full object-cover"
@@ -418,10 +408,14 @@ const unsaveRecipe = async (recipe) => {
       <div className="p-4 overflow-y-auto">
 
         {/* IMAGE */}
-        <img
-          src={selected.image || selected.strMealThumb}
-          className="w-full max-h-[250px] object-cover rounded-lg mb-4"
-        />
+       <img src={
+  selected.image
+    ? selected.image.startsWith("http")
+      ? selected.image
+      : `${BASE_URL}${selected.image}`
+    : selected.strMealThumb
+  className="w-full max-h-[250px] object-cover rounded-lg mb-4"
+    } />
 
         {/* INGREDIENTS */}
         <h3 className="font-semibold mb-2">Ingredients</h3>
@@ -636,7 +630,7 @@ const unsaveRecipe = async (recipe) => {
               return;
             }
 
-            await axios.post("http://localhost:5000/register", authForm);
+           axios.post(`${BASE_URL}/api/auth/register`, authForm);
 
             alert("✅ Registered! Now login");
 
