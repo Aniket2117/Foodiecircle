@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const API = "https://www.themealdb.com/api/json/v1/1";
+const BASE_URL = "https://foodiecircle.onrender.com";
 
 export default function App() {
   const [dbRecipes, setDbRecipes] = useState([]);
