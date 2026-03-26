@@ -11,10 +11,10 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [loading, setLoading] = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
 
   const [user, setUser] = useState(localStorage.getItem("user"));
   const [showAuth, setShowAuth] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
 
   const [savedRecipes, setSavedRecipes] = useState([]);
 
@@ -37,14 +37,14 @@ export default function App() {
     "Starter","Vegan","Vegetarian",
   ];
 
-  // ================= DB =================
+  // ================= FETCH DB =================
   useEffect(() => {
     axios.get(`${BASE_URL}/api/recipes`)
       .then((res) => setDbRecipes(res.data))
       .catch(() => {});
   }, []);
 
-  // ================= API =================
+  // ================= FETCH API =================
   useEffect(() => {
     fetchMeals();
   }, [search, category]);
@@ -76,17 +76,15 @@ export default function App() {
     setLoading(false);
   };
 
-  // ================= COMBINE =================
   const allRecipes = [...dbRecipes, ...apiRecipes];
 
   const filteredRecipes = allRecipes.filter((r) => {
     if (!r) return false;
-
     const name = r.title || r.strMeal || "";
-    const recipeCategory = r.category || r.strCategory || "";
+    const cat = r.category || r.strCategory || "";
 
     return (
-      (category === "All" || recipeCategory === category) &&
+      (category === "All" || cat === category) &&
       name.toLowerCase().includes(search.toLowerCase())
     );
   });
@@ -100,37 +98,29 @@ export default function App() {
         ...dbItem,
         image: dbItem.image?.startsWith("http")
           ? dbItem.image
-          : `http://localhost:5000/${dbItem.image}`,
-        ingredients:
-          typeof dbItem.ingredients === "string"
-            ? dbItem.ingredients.split(",")
-            : dbItem.ingredients || [],
-        steps:
-          typeof dbItem.steps === "string"
-            ? dbItem.steps.split(",")
-            : dbItem.steps || [],
+          : `${BASE_URL}${dbItem.image}`,
+        ingredients: Array.isArray(dbItem.ingredients)
+          ? dbItem.ingredients
+          : (dbItem.ingredients || "").split(","),
+        steps: Array.isArray(dbItem.steps)
+          ? dbItem.steps
+          : (dbItem.steps || "").split(","),
       });
       return;
     }
 
-    try {
-      const res = await axios.get(`${API}/lookup.php?i=${id}`);
-      setSelected(res.data.meals[0]);
-    } catch {}
+    const res = await axios.get(`${API}/lookup.php?i=${id}`);
+    setSelected(res.data.meals[0]);
   };
 
   // ================= AUTH =================
   const handleLogin = async () => {
     try {
       const res = await axios.post(`${BASE_URL}/api/auth/login`, authForm);
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", res.data.email);
-
-      setUser(res.data.email);
+      localStorage.setItem("user", res.data.userId);
+      setUser(res.data.userId);
       setShowAuth(false);
-
       fetchSaved();
-
       alert("Login successful ✅");
     } catch {
       alert("Login failed ❌");
@@ -145,122 +135,47 @@ export default function App() {
 
   // ================= SAVE =================
   const saveRecipe = async (recipe) => {
-    const token = localStorage.getItem("token");
-
-    if (!token) {
-      alert("Login first!");
-      return;
-    }
-
- const res = await axios.get(`${BASE_URL}/api/recipes`);
-setSavedRecipes(res.data.filter(r => r.savedBy?.includes(user)));
+    if (!user) return alert("Login first!");
+    await axios.post(`${BASE_URL}/api/recipes/save/${recipe._id}`, {
+      userId: user,
+    });
     fetchSaved();
-    alert("Saved ❤️");
+  };
+
+  const unsaveRecipe = async (recipe) => {
+    await axios.post(`${BASE_URL}/api/recipes/unsave/${recipe._id}`, {
+      userId: user,
+    });
+    fetchSaved();
   };
 
   const fetchSaved = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-   await axios.post(`${BASE_URL}/api/recipes/save/${recipe._id}`, {
-  userId: user
-});
-
-    setSavedRecipes(res.data);
+    const res = await axios.get(`${BASE_URL}/api/recipes`);
+    setSavedRecipes(res.data.filter(r => r.savedBy?.includes(user)));
   };
 
   // ================= UPLOAD =================
   const handleUpload = async () => {
-    try {
-      if (!user) {
-        alert("⚠️ Login required!");
-        setShowAuth(true);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append("title", uploadForm.title);
-      formData.append("category", uploadForm.category);
-  formData.append("ingredients", JSON.stringify(uploadForm.ingredients.split(",")));
-formData.append("steps", JSON.stringify(uploadForm.steps.split(",")));
-      formData.append("image", uploadForm.file);
-
-      const res =await axios.post(`${BASE_URL}/api/recipes/upload`, formData);
-
-      setDbRecipes((prev) => [res.data, ...prev]);
-
-      setUploadForm({
-        title: "",
-        category: "",
-        ingredients: "",
-        steps: "",
-        file: null,
-      });
-
-      alert("Uploaded!");
-    } catch {
-      alert("Upload failed");
-    }
-  };
-  // UNSAVE
-const unsaveRecipe = async (recipe) => {
-  try {
-    const token = localStorage.getItem("token");
-
-    console.log("UNSAVE CLICK:", recipe); // 🔍
-
-    const res = await axios.post(
-  axios.post("http://localhost:5000/unsave", recipe)
-
-    console.log("UNSAVE RESPONSE:", res.data);
-
-    setSavedRecipes((prev) =>
-      prev.filter(
-        (r) =>
-          String(r._id || r.idMeal) !==
-          String(recipe._id || recipe.idMeal)
-      )
-    );
-  } catch (err) {
-    console.log("UNSAVE ERROR:", err);
-    alert("Unsave failed ❌");
-  }
-};
-  // ================= HELPERS =================
-  const getIngredients = (meal) => {
-    if (!meal) return [];
-
-    if (typeof meal.ingredients === "string") {
-      return meal.ingredients.split(",").map(i => i.trim());
+    if (!user) {
+      setShowAuth(true);
+      return;
     }
 
-    if (Array.isArray(meal.ingredients)) return meal.ingredients;
+    const formData = new FormData();
+    formData.append("title", uploadForm.title);
+    formData.append("category", uploadForm.category);
+    formData.append("ingredients", JSON.stringify(uploadForm.ingredients.split(",")));
+    formData.append("steps", JSON.stringify(uploadForm.steps.split(",")));
+    formData.append("image", uploadForm.file);
+    formData.append("userId", user);
 
-    let list = [];
-    for (let i = 1; i <= 20; i++) {
-      const ing = meal[`strIngredient${i}`];
-      const measure = meal[`strMeasure${i}`];
-      if (ing && ing.trim()) list.push(`${measure} ${ing}`);
-    }
-    return list;
+    const res = await axios.post(`${BASE_URL}/api/recipes/upload`, formData);
+
+    setDbRecipes((prev) => [res.data, ...prev]);
+    alert("Uploaded!");
   };
 
-  const getSteps = (meal) => {
-    if (!meal) return [];
-
-    if (typeof meal.steps === "string") {
-      return meal.steps.split(",").map(s => s.trim());
-    }
-
-    if (Array.isArray(meal.steps)) return meal.steps;
-
-    if (meal.strInstructions) {
-      return meal.strInstructions.split(".").filter(s => s.trim());
-    }
-
-    return [];
-  };
-
+  // ================= UI =================
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0f0c29] to-[#1a1235] text-white p-6">
 
@@ -303,366 +218,50 @@ const unsaveRecipe = async (recipe) => {
         ))}
       </div>
 
-      {/* MAIN */}
-      <div className="flex gap-6">
-
-        {/* UPLOAD */}
-        <div className="w-[280px] bg-white/5 p-4 rounded-xl h-fit">
-          <h2 className="mb-3 font-bold">Upload Recipe</h2>
-
-          <input placeholder="Title"
-            value={uploadForm.title}
-            onChange={(e)=>setUploadForm({...uploadForm,title:e.target.value})}
-            className="w-full p-2 mb-2 bg-white/10 rounded" />
-
-          <select
-            value={uploadForm.category}
-            onChange={(e)=>setUploadForm({...uploadForm,category:e.target.value})}
-            className="w-full p-2 mb-2 bg-[#2a244d] text-white rounded"
-          >
-            <option value="">Select Category</option>
-            {categories.slice(1).map((cat) => (
-              <option key={cat} value={cat}>{cat}</option>
-            ))}
-          </select>
-
-          <input type="file"
-            onChange={(e)=>setUploadForm({...uploadForm,file:e.target.files[0]})}
-            className="mb-2" />
-
-          <textarea placeholder="Ingredients"
-            value={uploadForm.ingredients}
-            onChange={(e)=>setUploadForm({...uploadForm,ingredients:e.target.value})}
-            className="w-full p-2 mb-2 bg-white/10 rounded" />
-
-          <textarea placeholder="Steps"
-            value={uploadForm.steps}
-            onChange={(e)=>setUploadForm({...uploadForm,steps:e.target.value})}
-            className="w-full p-2 mb-2 bg-white/10 rounded" />
-
-          <button onClick={handleUpload} className="w-full bg-purple-500 py-2 rounded">
-            Upload
-          </button>
-        </div>
-
-        {/* RECIPES */}
-        <div className="flex-1 grid grid-cols-2 md:grid-cols-3 gap-6">
-          {loading ? (
-            <p>Loading...</p>
-          ) : (
-            filteredRecipes.map((meal) => (
-              <div
-                key={meal._id || meal.idMeal}
-                onClick={() => fetchMealDetails(meal._id || meal.idMeal)}
-                className="relative bg-white/5 rounded-xl overflow-hidden cursor-pointer hover:scale-105"
+      {/* MAIN GRID */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+        {loading ? (
+          <p>Loading...</p>
+        ) : (
+          filteredRecipes.map((meal) => (
+            <div
+              key={meal._id || meal.idMeal}
+              onClick={() => fetchMealDetails(meal._id || meal.idMeal)}
+              className="relative bg-white/5 rounded-xl overflow-hidden cursor-pointer hover:scale-105"
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  saveRecipe(meal);
+                }}
+                className="absolute top-2 right-2 bg-black/50 px-2 rounded"
               >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    saveRecipe(meal);
-                  }}
-                  className="absolute top-2 right-2 bg-black/50 px-2 rounded"
-                >
-                  ❤️
-                </button>
+                ❤️
+              </button>
 
-                <img
-                  src={
-                    meal.image
-                      ? meal.image.startsWith("http")
-                        ? meal.image
-                        : `${BASE_URL}${meal.image}`
-                      : meal.strMealThumb
-                  }
-                  className="h-40 w-full object-cover"
-                />
+              <img
+                src={
+                  meal.image
+                    ? meal.image.startsWith("http")
+                      ? meal.image
+                      : `${BASE_URL}${meal.image}`
+                    : meal.strMealThumb
+                }
+                className="h-40 w-full object-cover"
+              />
 
-                <div className="p-3">
-                  <h3>{meal.title || meal.strMeal}</h3>
-                  <p className="text-sm opacity-70">
-                    {meal.category || meal.strCategory}
-                  </p>
-                </div>
+              <div className="p-3">
+                <h3>{meal.title || meal.strMeal}</h3>
+                <p className="text-sm opacity-70">
+                  {meal.category || meal.strCategory}
+                </p>
               </div>
-            ))
-          )}
-        </div>
+            </div>
+          ))
+        )}
       </div>
-
-      {/* DETAILS MODAL */}
- {/* DETAILS MODAL */}
-{selected && (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[1000]">
-
-    {/* MODAL BOX */}
-    <div className="bg-[#1a1235] rounded-xl w-[90%] max-w-[500px] max-h-[85vh] flex flex-col">
-
-      {/* TITLE */}
-      <div className="p-4 border-b border-white/10">
-        <h2 className="text-xl font-semibold">
-          {selected.title || selected.strMeal}
-        </h2>
-      </div>
-
-      {/* ✅ SCROLLABLE CONTENT (ONLY THIS SCROLLS) */}
-      <div className="p-4 overflow-y-auto">
-
-        {/* IMAGE */}
-       <img src={
-  selected.image
-    ? selected.image.startsWith("http")
-      ? selected.image
-      : `${BASE_URL}${selected.image}`
-    : selected.strMealThumb
-  className="w-full max-h-[250px] object-cover rounded-lg mb-4"
-    } />
-
-        {/* INGREDIENTS */}
-        <h3 className="font-semibold mb-2">Ingredients</h3>
-        <ul className="mb-4 space-y-1 text-sm opacity-90">
-          {getIngredients(selected).map((i, idx) => (
-            <li key={idx}>• {i}</li>
-          ))}
-        </ul>
-
-        {/* STEPS */}
-        <h3 className="font-semibold mb-2">Steps</h3>
-        <ol className="space-y-2 text-sm opacity-90">
-          {getSteps(selected).map((s, i) => (
-            <li key={i}>{i + 1}. {s}</li>
-          ))}
-        </ol>
-
-      </div>
-
-      {/* ✅ BEAUTIFUL CLOSE BUTTON (BOTTOM FIXED) */}
-      <div className="p-4 border-t border-white/10">
-        <button
-          onClick={() => setSelected(null)}
-          className="w-full py-3 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold hover:scale-105 transition"
-        >
-          Close Recipe
-        </button>
-      </div>
-
-    </div>
-  </div>
-)}
-      {/* PROFILE */}
-     {savedRecipes.length > 0 && !selected && (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex flex-col">
-
-    {/* HEADER */}
-    <div className="flex justify-between items-center p-5 border-b border-white/10">
-      <h2 className="text-2xl font-semibold">Saved Recipes ❤️</h2>
-
-      <button
-        onClick={() => setSavedRecipes([])}
-        className="px-4 py-2 bg-red-500 rounded-lg hover:scale-105 transition"
-      >
-        Close
-      </button>
-    </div>
-
-    {/* CONTENT */}
-    <div className="p-6 overflow-y-auto">
-
-      {savedRecipes.length === 0 ? (
-        <p className="text-center text-gray-400">
-          No saved recipes yet 🍽️
-        </p>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-
-          {savedRecipes.map((r) => (
-  <div
-    key={r._id || r.idMeal}
-    className="relative bg-white/5 rounded-xl overflow-hidden hover:scale-105 transition duration-300 shadow-lg hover:shadow-purple-500/20"
-  >
-
-    {/* 🔥 UNSAVE BUTTON */}
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        unsaveRecipe(r);
-      }}
-      className="absolute top-2 right-2 px-3 py-1 text-xs bg-red-500/90 rounded-full hover:bg-red-600 transition"
-    >
-      Unsave
-    </button>
-
-    {/* CLICK AREA */}
-    <div
-      onClick={() => fetchMealDetails(r._id || r.idMeal)}
-      className="cursor-pointer"
-    >
-      <img
-        src={
-          r.image
-            ? r.image.startsWith("http")
-              ? r.image
-              : `http://localhost:5000/${r.image}`
-            : r.strMealThumb
-        }
-        className="h-40 w-full object-cover"
-      />
-
-      <div className="p-3">
-        <h3 className="font-semibold text-sm line-clamp-2">
-          {r.title || r.strMeal}
-        </h3>
-
-        <p className="text-xs text-gray-400 mt-1">
-          {r.category || r.strCategory || "Recipe"}
-        </p>
-      </div>
-    </div>
-
-  </div>
-))}
-        </div>
-      )}
-    </div>
-  </div>
-)}
-
-      {/* LOGIN */}
-      {showAuth && (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex justify-center items-center z-50">
-
-    <div className="relative bg-gradient-to-br from-[#1a1235] to-[#2a1f5c] p-8 rounded-2xl w-[360px] shadow-2xl border border-white/10">
-
-      {/* ❌ CLOSE BUTTON */}
-      <button
-        onClick={() => setShowAuth(false)}
-        className="absolute top-3 right-3 text-gray-300 hover:text-white text-lg"
-      >
-        ✖
-      </button>
-
-      {/* TITLE */}
-      <h2 className="text-2xl font-semibold text-center mb-6">
-        Welcome Back 👋
-      </h2>
-
-      {/* EMAIL */}
-      <input
-        type="email"
-        placeholder="Email"
-        className="w-full p-3 mb-4 rounded-lg bg-white/10 text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500"
-        onChange={(e) =>
-          setAuthForm({ ...authForm, email: e.target.value })
-        }
-      />
-
-      {/* PASSWORD */}
-      <input
-        type="password"
-        placeholder="Password"
-        className="w-full p-3 mb-5 rounded-lg bg-white/10 text-white placeholder-gray-400 outline-none focus:ring-2 focus:ring-purple-500"
-        onChange={(e) =>
-          setAuthForm({ ...authForm, password: e.target.value })
-        }
-      />
-
-      {/* LOGIN BUTTON */}
-      <button
-        onClick={handleLogin}
-        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 py-2 rounded-lg font-semibold hover:scale-105 transition"
-      >
-        Login
-      </button>
-
-      {/* REGISTER */}
-    <button
-  onClick={() => {
-    setShowAuth(false);
-    setShowRegister(true);
-  }}
-  className="w-full mt-3 text-sm text-gray-300 hover:text-white"
->
-  Don’t have an account? Register
-</button>
-{showRegister && (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex justify-center items-center z-50">
-
-    <div className="relative bg-gradient-to-br from-[#1a1235] to-[#2a1f5c] p-8 rounded-2xl w-[360px] shadow-2xl border border-white/10">
-
-      {/* ❌ CLOSE */}
-      <button
-        onClick={() => setShowRegister(false)}
-        className="absolute top-3 right-3 text-gray-300 hover:text-white text-lg"
-      >
-        ✖
-      </button>
-
-      {/* TITLE */}
-      <h2 className="text-2xl font-semibold text-center mb-6">
-        Create Account 🚀
-      </h2>
-
-      {/* EMAIL */}
-      <input
-        type="email"
-        placeholder="Email"
-        className="w-full p-3 mb-4 rounded-lg bg-white/10 text-white outline-none focus:ring-2 focus:ring-purple-500"
-        onChange={(e) =>
-          setAuthForm({ ...authForm, email: e.target.value })
-        }
-      />
-
-      {/* PASSWORD */}
-      <input
-        type="password"
-        placeholder="Password"
-        className="w-full p-3 mb-5 rounded-lg bg-white/10 text-white outline-none focus:ring-2 focus:ring-purple-500"
-        onChange={(e) =>
-          setAuthForm({ ...authForm, password: e.target.value })
-        }
-      />
-
-      {/* REGISTER BUTTON */}
-      <button
-        onClick={async () => {
-          try {
-            if (!authForm.email || !authForm.password) {
-              alert("Fill all fields");
-              return;
-            }
-
-           axios.post(`${BASE_URL}/api/auth/register`, authForm);
-
-            alert("✅ Registered! Now login");
-
-            setShowRegister(false);
-            setShowAuth(true); // 🔥 back to login
-          } catch (err) {
-            alert("❌ Register failed");
-          }
-        }}
-        className="w-full bg-gradient-to-r from-purple-500 to-pink-500 py-2 rounded-lg font-semibold hover:scale-105 transition"
-      >
-        Register
-      </button>
-
-      {/* BACK TO LOGIN */}
-      <button
-        onClick={() => {
-          setShowRegister(false);
-          setShowAuth(true);
-        }}
-        className="w-full mt-3 text-sm text-gray-300 hover:text-white"
-      >
-        Already have an account? Login
-      </button>
-
-    </div>
-  </div>
-)}
-    </div>
-  </div>
-)}
 
     </div>
   );
 }
+
