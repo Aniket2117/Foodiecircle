@@ -8,7 +8,7 @@ export default function App() {
   const [dbRecipes, setDbRecipes] = useState([]);
   const [apiRecipes, setApiRecipes] = useState([]);
   const [selected, setSelected] = useState(null);
-  const [search, setSearch] = useState("");z
+  const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
