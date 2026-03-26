@@ -60,23 +60,36 @@ const auth = (req, res, next) => {
 };
 
 // ================= REGISTER =================
-app.post("/register", async (req, res) => {
+app.post("/api/auth/register", async (req, res) => {
   const user = new User(req.body);
   await user.save();
   res.json({ msg: "User created" });
 });
 
 // ================= LOGIN =================
-app.post("/login", async (req, res) => {
-  const user = await User.findOne({
-    email: req.body.email,
-    password: req.body.password,
-  });
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const user = await User.findOne({
+      email: req.body.email,
+      password: req.body.password,
+    });
 
-  if (!user) return res.status(400).json({ msg: "Invalid credentials" });
+    if (!user) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
 
-  const token = jwt.sign({ id: user._id }, SECRET);
-  res.json({ token, email: user.email });
+    const token = jwt.sign({ id: user._id }, SECRET);
+
+    // ✅ IMPORTANT CHANGE
+    res.json({
+      token,
+      userId: user._id,   // 🔥 THIS FIXES EVERYTHING
+      email: user.email,
+    });
+
+  } catch (err) {
+    res.status(500).json({ msg: "Server error" });
+  }
 });
 
 // ================= SAVE RECIPE =================
